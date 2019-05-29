@@ -1,0 +1,87 @@
+#include <semaphore.h>
+#include <stdio.h>
+#include <pthread.h>
+#include <unistd.h>
+
+static int next_id = 1;
+
+sem_t connected_lock;
+sem_t operators;
+sem_t nextSync;
+
+
+void* phonecall(void* vargp) {
+
+	sem_wait(&nextSync); //assigning threads a unique number using semaphore 
+
+	int tid = next_id;
+	next_id++;
+
+	sem_post(&nextSync);
+
+	static int NUM_OPERATORS = 3;
+	static int NUM_LINES = 5;
+	static int connected = 0;
+
+	static int success = 0; 
+	while(!success) { 		//creates a loop using the connected 
+							//variable as a barrier for the call to keep trying 
+		printf("Thread[%i] trying to connect\n", tid);
+
+		sem_wait(&connected_lock);
+
+		if(connected < NUM_LINES) {
+			connected++;
+			success++;
+		}
+		sem_post(&connected_lock);
+	}
+
+	printf("Thread[%i] has available line\n", tid);
+
+
+	sem_wait(&operators); //counting semaphore to represent operators
+
+	printf("Thread[%i] is speaking to operator\n", tid);
+	//sleep(2); 
+	printf("Thread[%i] has bought a ticket\n", tid);
+
+	sem_post(&operators);
+
+	sem_wait(&connected_lock);
+
+	connected--;
+
+	sem_post(&connected_lock);
+
+	printf("Thread[%i] hung up\n", tid);
+
+}
+
+int main(int argc, char *argv[]) {
+
+	if(argc > 2 || argc < 2) return -1; 
+
+	int callerCount = atoi(argv[1]);	//argument passed in is # of callers
+
+	pthread_t threadIDs[callerCount];
+
+	sem_init(&connected_lock, 0, 1);
+
+	sem_init(&operators, 0, 3);
+	sem_init(&nextSync, 0, 1);
+
+	for(int i = 0; i < callerCount; i++) {
+		
+		pthread_create(&threadIDs[i], NULL, phonecall, NULL);
+		
+	}
+	for(int i = 0; i < callerCount; i++) {
+
+		pthread_join(threadIDs[i], NULL);
+	}
+
+
+}
+
+
